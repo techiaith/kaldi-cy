@@ -26,7 +26,7 @@ fi
 wget -P ${TEST_ROOT} -N -nd -c -e robots=off -r -np ${DATA_URL}/${NAME}.tar.gz || \
  { echo "WGET error"'!' ; exit 1 ; }
 
-tar -zxf ${TEST_ROOT}/${NAME}.tar.gz --directory ${TEST_ROOT}
+tar -zxf ${TEST_ROOT}/${NAME}.tar.gz 
 
 python ./local/make_corpus_txt.py 
 
