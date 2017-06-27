@@ -6,7 +6,7 @@ Porth Technolegau Iaith ac yn ei pharatoi ar gyfer hyfforddi modelau acwstig
 o fewn Kaldi: 
 
 $ ./local/init.sh
-$ ./local/getdata.sh
+$ ./local/getaudio.sh
 $ ./local/getlexicon.sh
 
 
