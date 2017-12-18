@@ -1,12 +1,14 @@
 *.pyc
 */s5/data/*
+*/s5/data_orig/*
 */s5/mfcc/*
 */s5/exp/*
 */s5/corpus/*
-*/s5/paldaruo_audio/*
 */s5/utils
 */s5/steps
 */s5/test_*/*
+*/s5/paldaruo_audio/*
 */s5/trained_models/*
 */s5/exp_*/*
-
+*/s5/paldaruo_audio/*
+*/s5/test_audio/*

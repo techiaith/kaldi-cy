@@ -1,8 +1,8 @@
 #!/bin/bash
 
-source ./path.sh
+audio_dir=$1
 
-AUDIO_DIRS=$(find $DATA_ROOT -maxdepth 1 -type d)
+AUDIO_DIRS=$(find $audio_dir -maxdepth 1 -type d)
 for a in $AUDIO_DIRS; do
 	echo $a
 	mkdir -p $a/48kHz

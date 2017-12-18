@@ -15,18 +15,20 @@
 # See the Apache 2 License for the specific language governing permissions and
 # limitations under the License. #
 
-rm -rf trained_models
+trained_models=$1
+model_type=$2
+exp_dir=$3
 
-mkdir -p trained_models
-mkdir -p trained_models/tri2b_mmi
+rm -rf $trained_models
+mkdir -p $trained_models/$model_type
 
-echo "--- Exporting models to ./trained_models ..."
+echo "--- Exporting $model_type models to $trained_models/$model_type ..."
 
-cp -f conf/mfcc.conf trained_models/tri2b_mmi/mfcc.conf
+cp -f conf/mfcc.conf $trained_models/$model_type/mfcc.conf
 
-cp -f exp/tri2b/graph/HCLG.fst trained_models/tri2b_mmi/HCLG.fst
-cp -f exp/tri2b/graph/words.txt trained_models/tri2b_mmi/words.txt
+cp -f $exp_dir/$model_type/graph/HCLG.fst $trained_models/$model_type/HCLG.fst
+cp -f $exp_dir/$model_type/graph/words.txt $trained_models/$model_type/words.txt
 
-cp -f exp/tri2b_mmi/final.mat trained_models/tri2b_mmi/final.mat
-cp -f exp/tri2b_mmi/final.mdl trained_models/tri2b_mmi/final.mdl
+cp -f $exp_dir/$model_type/final.mat $trained_models/$model_type/final.mat
+cp -f $exp_dir/$model_type/final.mdl $trained_models/$model_type/final.mdl
 
