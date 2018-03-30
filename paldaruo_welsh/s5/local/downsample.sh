@@ -1,22 +1,29 @@
 #!/bin/bash
 
-audio_dir=$1
+audio_corpus_dir=$1
+audio_dir=$2
+sample_rate=$3
 
-AUDIO_DIRS=$(find $audio_dir -maxdepth 1 -type d)
+rm -rf $audio_dir
+
+AUDIO_DIRS=$(find $audio_corpus_dir -maxdepth 1 -type d)
 for a in $AUDIO_DIRS; do
 	echo $a
-	mkdir -p $a/48kHz
+	#mkdir -p $a/orig
+
+	#WAV_FILES=$(find $a -maxdepth 1 -type f -name '*.wav')
+	#for w in $WAV_FILES; do
+	#	mv $w $a/orig/
+	#done
 
 	WAV_FILES=$(find $a -maxdepth 1 -type f -name '*.wav')
-	for w in $WAV_FILES; do
-		mv $w $a/48kHz/
-	done
-
-	WAV_FILES_48kHz=$(find $a/48kHz -maxdepth 1 -type f -name '*.wav')
-	for wf in $WAV_FILES_48kHz; do
-		echo $wf
+	for wf in $WAV_FILES; do
+		uid=$(basename "$(dirname -- "$wf")")
 		filename=$(basename "$wf")
-		sox $wf -c 1 -r 16000 $a/$filename
+		mkdir -p $audio_dir/$uid
+		echo $audio_dir/$uid/$filename
+		sox $wf -c 1 -r $sample_rate $audio_dir/$uid/$filename
 	done
 
 done
+

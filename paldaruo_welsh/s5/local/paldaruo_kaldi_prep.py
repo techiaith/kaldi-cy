@@ -5,8 +5,8 @@ def make_spk2gender_file(source_dir, meta_file, destination_dir):
 
 	print 'make_spk2gender(' + source_dir + ', ' + destination_dir + ')'
 
-	spk2gender_file = open(destination_dir + '/spk2gender.map','w')
-	metadata_file = csv.DictReader(open(os.path.join(source_dir, meta_file)))
+	spk2gender_file = codecs.open(os.path.join(destination_dir, 'spk2gender.map'), 'w', encoding='utf-8')
+	metadata_file = csv.DictReader(codecs.open(os.path.join(source_dir, meta_file), 'r', encoding='utf-8'))
 
 	for row in metadata_file:
 		speaker = row['uid']
@@ -27,8 +27,8 @@ def make_utt2spk_file(source_dir, meta_file, destination_dir):
 	print 'make_utt2spk(' + source_dir + ', ' + destination_dir + ')'
 
         audio_data_files = utils.get_directory_structure(source_dir)
-        metadata_file = csv.DictReader(open(os.path.join(source_dir,meta_file)))
-        utt2spk_file = open(os.path.join(destination_dir,'utt2spk'),'w')
+        metadata_file = csv.DictReader(codecs.open(os.path.join(source_dir,meta_file),'r',encoding='utf-8'))
+        utt2spk_file = codecs.open(os.path.join(destination_dir,'utt2spk'),'w',encoding='utf-8')
 
 	utt2spk_file_content = []
 
@@ -54,8 +54,8 @@ def make_wavscp_file(source_dir, meta_file, destination_dir):
 	print 'make_wavscp(' + source_dir + ', ' + destination_dir + ')'
 
         audio_data_files = utils.get_directory_structure(source_dir)
-        wavscp_file = open(os.path.join(destination_dir,'wav.scp'),'w')
-        metadata_file = csv.DictReader(open(os.path.join(source_dir, meta_file)))
+        wavscp_file = codecs.open(os.path.join(destination_dir,'wav.scp'),'w',encoding='utf-8')
+        metadata_file = csv.DictReader(codecs.open(os.path.join(source_dir, meta_file),'r',encoding='utf-8'))
 
 	wavscp_file_content = []
 
@@ -81,10 +81,10 @@ def make_text_file(source_dir, meta_file, prompts_file, destination_dir):
 	print 'make_text_file(' + source_dir + ', ' + destination_dir + ')'
       
  	audio_data_files = utils.get_directory_structure(source_dir)
-        prompts = utils.get_prompts(os.path.join(source_dir,prompts_file))
+        prompts = utils.get_prompts(os.path.join(source_dir, prompts_file))
 
-        text_file = codecs.open(os.path.join(destination_dir,'text'),'w', encoding='utf-8')
-        metadata_file = csv.DictReader(open(os.path.join(source_dir, meta_file)))
+        text_file = codecs.open(os.path.join(destination_dir,'text'), 'w', encoding='utf-8')
+        metadata_file = csv.DictReader(codecs.open(os.path.join(source_dir, meta_file), 'r', encoding='utf-8'))
 
  	textfile_content = []
 
@@ -102,6 +102,8 @@ def make_text_file(source_dir, meta_file, prompts_file, destination_dir):
                 text_file.write("%s\n" % line)
 
         text_file.close()
+
+
 
 def usage():
 	print "paldaruo_kaldi_prep.py -a,--audiodir <audio_dir> -d,--datadir <data_dir> -t,--datatype train|dev|test"
@@ -142,6 +144,8 @@ def main():
 	make_utt2spk_file(source_dir,"metadata.csv", destination_dir)
 	make_wavscp_file(source_dir,"metadata.csv", destination_dir)
 	make_text_file(source_dir, "metadata.csv", "samples.txt", destination_dir)
+
+	print "paldaruo_kaldi_prep.py completed"
 
 if __name__ == "__main__":
 	main()

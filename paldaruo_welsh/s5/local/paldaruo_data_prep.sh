@@ -6,21 +6,41 @@ IFS=$'\n\t'
 command -v git-lfs >/dev/null 2>&1 ||\
  { echo "\"git lfs\" is needed but not found"'!'; exit 1; }
 
-audio_data=$1
+corpus_data=$1
+audio_data=$2
+sample_rate=$3
 
-DATA_SRC="https://git.techiaith.bangor.ac.uk/Data-Porth-Technolegau-Iaith/Corpws-Paldaruo"
-DATA_VERSION="v4.0"
+if [ ! -d $corpus_data ] ; then
 
-echo "--- Starting data download from public repository (may take some time) ..."
-git -c http.sslVerify=false lfs clone --branch ${DATA_VERSION} --depth 1 ${DATA_SRC} ${audio_data} ||\
- { echo "git lfs clone error"'!' ; exit 1 ; }
+	mkdir -p $corpus_data
 
-echo "--- Extract wav files from zip archives ---"
-for a in ${audio_data}/audio/wav/*.zip; do
-  unzip -d ${audio_data} $a
-done
-rm -rf ${audio_data}/audio
+	DATA_SRC="https://git.techiaith.bangor.ac.uk/Data-Porth-Technolegau-Iaith/Corpws-Paldaruo"
+	DATA_VERSION="v4.0"
 
-echo "--- Downsample to 16kHz ---"
-source ./local/downsample.sh $audio_data
+	echo "--- Starting data download from public repository (may take some time) ..."
+	git -c http.sslVerify=false lfs clone --branch ${DATA_VERSION} --depth 1 ${DATA_SRC} ${corpus_data} || \
+	 { echo "git lfs clone error"'!' ; exit 1 ; }
+
+	echo "--- Extract wav files from zip archives ---"
+	for a in ${corpus_data}/audio/wav/*.zip; do
+	  unzip -d ${corpus_data} $a
+	done
+
+	rm -rf ${corpus_data}/audio
+fi
+
+if [ ! -d $audio_data ] ; then
+
+	echo "--- Downsample ---"
+	source ./local/downsample.sh $corpus_data $audio_data $sample_rate
+	cp $corpus_data/metadata.csv $audio_data
+	cp $corpus_data/samples.txt $audio_data
+
+fi
+
+echo "Checking for $corpus_data/all_info.sorted.txt"
+if [ -f $corpus_data/all_info.sorted.txt ] ; then
+	echo "--- Cleaning up audio data ---"
+	./local/paldaruo_corpus_cleanup.py $audio_data $corpus_data/all_info.sorted.txt
+fi
 

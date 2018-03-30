@@ -32,3 +32,4 @@ def get_prompts(sourcefile):
             prompts[key]=elements[1]
 
     return prompts
+

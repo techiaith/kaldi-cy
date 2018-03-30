@@ -19,12 +19,11 @@ expr "$*" : ".*--help" > /dev/null && usage
 . ./cmd.sh || exit 1
 
 
-echo "==== AUDIO DATA PATHS ===="
+echo "==== AUDIO DATA FROM path.sh ===="
 echo "TRAIN_AUDIO_ROOT=${TRAIN_AUDIO_ROOT}"
-echo "DEV_AUDIO_ROOT=${DEV_AUDIO_ROOT}"
 echo "TEST_AUDIO_ROOT=${TEST_AUDIO_ROOT}"
 echo
-echo "==== OUTPUT PATHS ===="
+echo "==== OUTPUT PATHS FROM path.sh ===="
 echo "OUTPUT_ROOT=${OUTPUT_ROOT}"
 echo "MFCC_ROOT=${MFCC_ROOT}"
 echo "EXP_ROOT=${EXP_ROOT}"
@@ -32,6 +31,42 @@ echo "KALDI_DATA_ROOT=${KALDI_DATA_ROOT}"
 echo "KALDI_DATA_LOCAL_ROOT=${KALDI_DATA_LOCAL_ROOT}"
 echo "KALDI_LEXICON_ROOT=${KALDI_LEXICON_ROOT}"
 echo "TGT_MODELS_OUTPUT=${TGT_MODELS_OUTPUT}"
+
+
+# === Locally defined paths and variables ============================================================
+
+stage=0 # which stage to start at
+domain='macsen_v2.0' # 'dictation', 'macsen_v1.0' or 'macsen_v2.0'
+sample_rate=16000
+
+testset_name='macsen_v1.0'  # usually = $domain
+ignore_testset=false # if true, then we won't be testing the new models. Not recommended. 
+
+corpus_audio=$CORPUS_AUDIO_ROOT
+testcorpus_audio=$TESTCORPUS_AUDIO_ROOT
+
+train_audio=$TRAIN_AUDIO_ROOT/$sample_rate
+test_audio=$TEST_AUDIO_ROOT/$sample_rate
+
+data_dir=$KALDI_DATA_ROOT
+local_data_dir=$KALDI_DATA_LOCAL_ROOT
+lexicon_dir=$KALDI_LEXICON_ROOT
+
+languagemodel_dir=$KALDI_DATA_LOCAL_ROOT/lang_model
+lm_name=$domain
+
+mfcc_dir=$MFCC_ROOT
+exp_dir=$EXP_ROOT
+
+cpus=`nproc`
+if (($cpus > 1)); then
+	cpus=`expr $cpus / 2`
+fi
+
+nj=$cpus
+
+
+# ====================================================================================================
 
 
 if [ ! -L steps ] && [ ! -L utils ] ; then
@@ -59,72 +94,48 @@ if [ ! -L steps ] && [ ! -L utils ] ; then
         fi
 fi
 
+
 . utils/parse_options.sh || exit 1
 [[ $# -ge 1 ]] && { echo "Wrong arguments!"; exit 1; } 
 
-cpus=`nproc`
-if (($cpus > 1)); then
-	cpus=`expr $cpus / 2`
-fi
 
-nj=$cpus
-
-stage=0
-
-paldaruo_audio=$TRAIN_AUDIO_ROOT
-test_audio=$TEST_AUDIO_ROOT
-testset_name='Macsen'
-
-data_dir=$KALDI_DATA_ROOT
-lexicon_dir=$KALDI_LEXICON_ROOT
-languagemodels_dir=$KALDI_DATA_LOCAL_ROOT
-lm_order=3 # language model order (n-gram quantity) - 1 is enough for digits grammar
-
-mfcc_dir=$MFCC_ROOT
-exp_dir=$EXP_ROOT
+echo
+echo "===== CHECKING PALDARUO AUDIO DATA ====="
+echo
+./local/paldaruo_data_prep.sh $corpus_audio $train_audio $sample_rate || exit 1
 
 
-if [ ! -d $paldaruo_audio ] ; then 
-	echo
-	echo "===== CHECKING PALDARUO AUDIO DATA ====="
-	echo
-	echo "Paldaruo audio files are not present. "
-	echo "Will attempt to download"
-	echo
-	./local/paldaruo_data_prep.sh $paldaruo_audio || exit 1
-fi
-
-
-
-if [ ! -d $test_audio ] ; then
+if [ "$ignore_testset" == false ]; then
 	echo
 	echo "===== CHECKING AUDIO FOR TESTING MODELS ====="
 	echo
 	echo "Audio files for testing are not present. "
 	echo "Will attempt to download"
 	echo
-	./local/paldaruo_test_prep.sh $test_audio $testset_name || exit 1
+	./local/paldaruo_test_prep.sh $testcorpus_audio $testset_name $test_audio $sample_rate || exit 1	
 fi
 
 
-
+echo 
+echo "===== CHECKING KALDI TRAINING AND TEST SETUP ====="
+echo
 if [ ! -d $data_dir ] ; then
-	echo 
-	echo "===== CHECKING KALDI TRAINING AND TEST SETUP ====="
-	echo
 	echo "Kaldi data directory not present. "
 	echo "Creating spk2utt, utt2spk, wav.scp and text files "
 	echo
-	for x in train test
-	do
-		if [ "$x" == "train" ]; then
-			source_audio=$paldaruo_audio
-		else
-			source_audio=$test_audio
-		fi 
-		./local/paldaruo_kaldi_prep.py -a $source_audio -d $data_dir -t $x
-	done
+	./local/paldaruo_kaldi_prep.py -a $train_audio -d $data_dir -t train
+	utils/utt2spk_to_spk2utt.pl $data_dir/train/utt2spk > $data_dir/train/spk2utt
+
+	echo
+	echo "Kaldi test data directory not present. "
+	echo "Creating test spk2utt, utt2spk, wav.scp and text files "
+	echo
+	if [ "$ignore_testset" == "false" ]; then
+		./local/paldaruo_kaldi_prep.py -a $test_audio -d $data_dir -t test
+		utils/utt2spk_to_spk2utt.pl $data_dir/test/utt2spk > $data_dir/test/spk2utt
+	fi	
 fi
+
 
 
 if [ ! -d $lexicon_dir ] ; then
@@ -137,36 +148,39 @@ if [ ! -d $lexicon_dir ] ; then
 	./local/paldaruo_lexicon_prep.sh $lexicon_dir
 	./local/paldaruo_phones_prep.py -d $lexicon_dir
 	utils/prepare_lang.sh $lexicon_dir "<UNK>" $data_dir/local/lang $data_dir/lang
+	echo
+	echo "=================================="
 fi
 
 
-if [ ! -f $languagemodels_dir/corpus.txt ] ; then
+
+if [ ! -d $languagemodel_dir ] ; then
+	echo 
+	echo "===== PREPARING LANGUAGE MODEL SETUP ====="
 	echo
-	echo "===== CHECKING LANGUAGE MODELLING SETUP ====="
+	echo "Language models not present. Will fetch $lm_name "
 	echo
-	echo "Language models not present. "
-	echo "Will attempt to create"
-	./local/paldaruo_lm_prep.py -t $test_audio -l $languagemodels_dir -o $lm_order -x $lexicon_dir
-	utils/format_lm.sh $data_dir/lang $languagemodels_dir/tmp/lm.arpa.gz $lexicon_dir/lexicon.txt $data_dir/lang_test || exit 1;
+	echo "./local/paldaruo_lm_fetch.sh ${languagemodel_dir} ${lm_name}"
+	./local/paldaruo_lm_fetch.sh $languagemodel_dir $lm_name || exit 1;
+	echo	
+	echo "=========================================="
 fi
 
-
-echo
-echo "===== PREPARING ACOUSTIC DATA ====="
-echo
-for x in train test 
-do
-	utils/utt2spk_to_spk2utt.pl $data_dir/$x/utt2spk > $data_dir/$x/spk2utt
-done
-echo "==================================="
 
 
 if [ ! -d $mfcc_dir ] ; then 
 	echo
 	echo "===== FEATURES EXTRACTION ====="
 	echo
+
+	echo "--- Updating mfcc config ---"
+	sed s/SAMPLERATE/$sample_rate/g $CONFIG_ROOT/mfcc.conf.template > $CONFIG_ROOT/mfcc.conf
+
 	for x in train test
-	do
+	do	
+		if [ "$x" == "test" ] && [ "$ignore_testset" == "true" ] ; then
+			continue
+		fi
 		echo
 		echo "== " $x " =="
 		echo
@@ -179,6 +193,7 @@ if [ ! -d $mfcc_dir ] ; then
 fi
 
 
+
 if [ $stage -le 1 ]; then
 	echo
 	echo "===== MONOPHONE TRAINING ====="
@@ -186,19 +201,22 @@ if [ $stage -le 1 ]; then
 	echo "Start monophone training"
 	echo
 	steps/train_mono.sh --nj $nj --cmd "$train_cmd" $data_dir/train $data_dir/lang $exp_dir/mono  || exit 1;
+	utils/mkgraph.sh --mono $languagemodel_dir $exp_dir/mono $exp_dir/mono/graph || exit 1;
 	echo
 	echo "Monophone training done."
 	echo
-	echo "Decoding test sets using monophone models."
-	echo
-	utils/mkgraph.sh --mono $data_dir/lang_test $exp_dir/mono $exp_dir/mono/graph || exit 1;
-	steps/decode.sh --config conf/decode.config --nj 1 --cmd "$decode_cmd" $exp_dir/mono/graph $data_dir/test $exp_dir/mono/decode_test || exit 1;
-	echo
-	echo "Monophone deooding done"
-	echo
+	if [ "$ignore_testset" == false ] ; then 
+		echo "Decoding test sets using monophone models."
+		echo
+		steps/decode.sh --config conf/decode.config --nj 1 --cmd "$decode_cmd" $exp_dir/mono/graph $data_dir/test $exp_dir/mono/decode_test || exit 1;
+		echo
+		echo "Monophone deooding done"
+		echo
+	fi
 	echo "========================="
 	echo
 fi
+
 
 
 if [ $stage -le 2 ]; then
@@ -209,16 +227,18 @@ if [ $stage -le 2 ]; then
 	echo
 	steps/align_si.sh --nj $nj --cmd "$train_cmd" $data_dir/train $data_dir/lang $exp_dir/mono $exp_dir/mono_ali || exit 1;
 	steps/train_deltas.sh --cmd "$train_cmd" 2000 11000 $data_dir/train $data_dir/lang $exp_dir/mono_ali $exp_dir/tri1 || exit 1;
-	echo
+	utils/mkgraph.sh $languagemodel_dir $exp_dir/tri1 $exp_dir/tri1/graph || exit 1;
+	echo 
 	echo "Triphone training done"
 	echo
-	echo "Decoding the test set using triphone models"
-	echo
-	utils/mkgraph.sh $data_dir/lang_test $exp_dir/tri1 $exp_dir/tri1/graph || exit 1;
-	steps/decode.sh --config conf/decode.config --nj 1 --cmd "$decode_cmd" $exp_dir/tri1/graph $data_dir/test $exp_dir/tri1/decode_test || exit 1;
-	echo
-	echo "Triphone decoding done"
-	echo
+	if [ "$ignore_testset" == false ] ; then	
+		echo "Decoding the test set using triphone models"
+		echo
+		steps/decode.sh --config conf/decode.config --nj 1 --cmd "$decode_cmd" $exp_dir/tri1/graph $data_dir/test $exp_dir/tri1/decode_test || exit 1;
+		echo
+		echo "Triphone decoding done"
+		echo
+	fi
 	echo "============================="
 	echo
 fi
@@ -232,16 +252,18 @@ if [ $stage -le 3 ]; then
 	echo
 	steps/align_si.sh  --nj $nj --cmd "$train_cmd" $data_dir/train $data_dir/lang $exp_dir/tri1 $exp_dir/tri1_ali || exit 1;
 	steps/train_lda_mllt.sh --cmd "$train_cmd" 2000 11000 $data_dir/train $data_dir/lang $exp_dir/tri1_ali $exp_dir/tri2 || exit 1;
+	utils/mkgraph.sh $languagemodel_dir  $exp_dir/tri2 $exp_dir/tri2/graph || exit 1;
 	echo
 	echo "Triphone LDA and MLLT training done"
 	echo
-	echo "Decoding the test set using triphone LDA and MLLT models"
-	echo
-	utils/mkgraph.sh $data_dir/lang_test  $exp_dir/tri2 $exp_dir/tri2/graph || exit 1;
-	steps/decode.sh --nj 1 --cmd "$decode_cmd" $exp_dir/tri2/graph $data_dir/test $exp_dir/tri2/decode_test || exit 1;
-	echo
-	echo "LDA+MLLT decoding done."
-	echo
+	if [ "$ignore_testset" == false ] ; then
+		echo "Decoding the test set using triphone LDA and MLLT models"
+		echo
+		steps/decode.sh --nj 1 --cmd "$decode_cmd" $exp_dir/tri2/graph $data_dir/test $exp_dir/tri2/decode_test || exit 1;
+		echo
+		echo "LDA+MLLT decoding done."
+		echo
+	fi
 	echo "============================================="
 	echo
 fi
@@ -255,16 +277,18 @@ if [ $stage -le 4 ]; then
 	echo
 	steps/align_si.sh  --nj $nj --cmd "$train_cmd" $data_dir/train $data_dir/lang $exp_dir/tri2 $exp_dir/tri2_ali || exit 1;
 	steps/train_sat.sh --cmd "$train_cmd" 2000 11000 $data_dir/train $data_dir/lang $exp_dir/tri2_ali $exp_dir/tri3 || exit 1;
+	utils/mkgraph.sh $languagemodel_dir  $exp_dir/tri3 $exp_dir/tri3/graph || exit 1;
 	echo
 	echo "Triphone SAT and FMLLR training done"
 	echo
-	echo "Decoding the test set using triphone SAT and FMLLR models"
-	echo
-	utils/mkgraph.sh $data_dir/lang_test  $exp_dir/tri3 $exp_dir/tri3/graph || exit 1;
-	steps/decode_fmllr.sh --nj 1 --cmd "$decode_cmd" $exp_dir/tri3/graph $data_dir/test $exp_dir/tri3/decode_test || exit 1;
-	echo
-	echo "SAT and FMLLR decoding done."
-	echo
+	if [ "$ignore_testset" == false ] ; then
+		echo "Decoding the test set using triphone SAT and FMLLR models"
+		echo
+		steps/decode_fmllr.sh --nj 1 --cmd "$decode_cmd" $exp_dir/tri3/graph $data_dir/test $exp_dir/tri3/decode_test || exit 1;
+		echo
+		echo "SAT and FMLLR decoding done."
+		echo
+	fi
 	echo "============================================="
 	echo
 fi
@@ -276,13 +300,16 @@ if [ $stage -le 5 ]; then
 	echo
 	steps/cleanup/find_bad_utts.sh --nj $nj --cmd "$train_cmd" $data_dir/train $data_dir/lang $exp_dir/tri3 $exp_dir/tri3_cleanup
 	head  $exp_dir/tri3_cleanup/all_info.sorted.txt
+	#cp $exp_dir/tri3_cleanup/all_info.sorted.txt $corpus_audio
 	echo
 	echo "============================================="
 	echo
 fi
 
 
-for x in $exp_dir/*/decode*; do [ -d $x ] && echo && echo $x && grep WER $x/wer_* | utils/best_wer.sh; done
+if [ "$ignore_testset" == false ] ; then
+	for x in $exp_dir/*/decode*; do [ -d $x ] && echo && echo $x && grep WER $x/wer_* | utils/best_wer.sh; done
+fi
 
 
 echo
@@ -293,4 +320,5 @@ local/export_models.sh $TGT_MODELS_OUTPUT $model_type $exp_dir
 echo
 echo "============================================="
 echo
+
 

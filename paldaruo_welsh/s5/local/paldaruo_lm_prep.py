@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-import os, sys, getopt, utils, csv, codecs, errno, re
+#!/usr/bin/env python3
+import os, sys, getopt, utils, csv, errno, re
 from subprocess import call
 
 lexicon = {}
@@ -8,96 +8,99 @@ token_exceptions = ["'","R"]
 #lexicon_dir = 'data/local/dict'
 
 def initialise_lexicon(lexicon_dir):
-	with open(lexicon_dir + '/lexicon.txt') as lexicon_file:
+	with open(lexicon_dir + '/lexicon.txt', 'r', encoding='utf-8') as lexicon_file:
         	for line in lexicon_file:
                 	elements = line.rstrip().split(' ',1)
                 	key = elements[0].replace('*/','')
                 	lexicon[key]=elements[1]
 
 
-def sanitize_file(infile, outfile):
+def sanitize_file(infile, outdir, outfile):
 
-        out_file = codecs.open(outfile,'wb+', encoding='utf-8')
+	out_file = open(outfile, 'w', encoding='utf-8')
+	oov_filelocation = os.path.join(outdir,"oov.txt")
+	oov_file = open(oov_filelocation, 'w', encoding='utf-8')
 
-        with codecs.open(infile,'r', encoding='utf-8') as in_file:
+	oov_set = set()
+
+	with open(infile, 'r', encoding='utf-8') as in_file:
+
                 for line in in_file.readlines():
                         upper=line.rstrip('\n').upper()
-                        tokens = tuple(re.findall(r"(?:^|\b).(?:\B.)*",upper))
+                        tokens = tuple(re.findall(r"\S+", upper))
                         tokens_out=[]
-                        write_to_file=False
+                        write_to_file=True
                         last_token=''
 
                         for token in tokens:
                                 last_token=token
-                                if token.isalpha() or token in token_exceptions:
-                                        if token in lexicon or token in token_exceptions:
-                                                tokens_out.append(token)
-                                                write_to_file=True
-
-                                if write_to_file:
-                                        continue
-
-                                write_to_file=False
-                                break
-
+                                tokens_out.append(token)
+                                if not token in lexicon and not token in token_exceptions:
+                                        oov_set.add(token)
+                                        write_to_file=False
 
                         tokens_out_string = ' '.join(tokens_out)
                         tokens_out_string = tokens_out_string.replace(" ' ","'")
                         tokens_out_string = '<s> %s </s>' % tokens_out_string
 
                         if write_to_file:
-                                #print tokens_out_string
                                 out_file.write(tokens_out_string + "\n")
-                        else:
-                                print "Skipped " + upper.encode('utf-8') + ", " + tokens_out_string.encode('utf-8') + ", " + last_token.encode('utf-8')
 
-        out_file.close()
+	out_file.close()
 
+	oov_count=0	
+	for oov in sorted(oov_set):
+		oov_file.write(oov + "\n")
+		oov_count += 1
 
-def make_corpus_text_file(source_dir, prompts_file, destination):
-	
-	out_file=os.path.join(destination,'corpus.tmp')
-        prompts = utils.get_prompts(os.path.join(source_dir,prompts_file))
-        text_file = codecs.open(out_file,'w', encoding='utf-8')
-
-        for key,value in prompts.items():
-                text_file.write(value + '\n')
-
-        text_file.close()
-	return out_file
+	oov_file.close()
+	print ("%s OOV words written %s" % (oov_count, oov_filelocation))
 
 
 def usage():
-        print "paldaruo_lm_prep.py -t,--testdir <test data directory> -l,--localdir <local directory e.g. /data/local> -o,--lmorder <language model order e.g. 3> -x,--lexicondir <lexicon directory>" 
+        print ("paldaruo_lm_prep.py -d,--datadir <directory containing input data> -f, --datafile <file containing input data> -l,--localdir <local/output directory e.g. /data/local> -o,--lmorder <language model order e.g. 3> -x,--lexicondir <lexicon directory>") 
+
 
 def main():
 
         # arguments
-        datatest_dir = ''
+	data_dir = ''
+	data_file = ''
+
 	datalocal_dir = ''
 	lexicon_dir = ''
 	lm_order = 0;
-        try:
-                opts, args = getopt.getopt(sys.argv[1:], "ha:t:l:o:x:",["--testdir=","--localdir=","--lmorder","--lexicondir"])
-                if len(opts) != 4:
+
+	try:
+                opts, args = getopt.getopt(sys.argv[1:], "ha:d:f:l:o:x:",["--datadir=","--datafile=","--localdir=","--lmorder=","--lexicondir="])
+                if len(opts) != 5:
                         raise getopt.GetoptError("Missing arguments")
-        except getopt.GetoptError, msg:
-                print msg
+
+	except (getopt.GetoptError, msg):
+                print (msg)
                 usage()
+                print (sys.argv[1:])
                 sys.exit(2)
 
-        for opt, arg in opts:
+	for opt, arg in opts:
                 if opt == '-h':
                         usage()
                         sys.exit()
-                elif opt in ("-t", "--testdir"):
-                        datatest_dir = arg
+                elif opt in ("-d", "--datadir"):
+                        data_dir = arg
+                        print ("-d, --datatdir:" + data_dir)
+                elif opt in ("-f", "--datafile"):
+                        data_file = arg
+                        print ("-f,--data_file: " + data_file)
                 elif opt in ("-l", "--localdir"):
                         datalocal_dir = arg
-		elif opt in ("-x", "--lexicondir"):
-			lexicon_dir = arg
-		elif opt in ("-o", "--lmorder"):
-			lm_order = arg                 
+                        print ("-l, --localdir: " + datalocal_dir)
+                elif opt in ("-x", "--lexicondir"):
+                        lexicon_dir = arg
+                        print ("-x, --lexicondir: " + lexicon_dir)
+                elif opt in ("-o", "--lmorder"):
+                        lm_order = arg 
+                        print ("-o, --lmorder: " + lm_order)
                 else:
                         assert False, "unhandled option"
 
@@ -108,19 +111,16 @@ def main():
 	if not os.path.exists(datalocal_tmpdir):
 		os.makedirs(datalocal_tmpdir)
 
+	print ("Sanitizing text data ....")
 	initialise_lexicon(lexicon_dir)
-	corpus_text_file = os.path.join(datalocal_dir,"corpus.txt")
-        tmp_corpus_file = make_corpus_text_file(datatest_dir, "samples.txt", datalocal_dir)
-	sanitize_file(tmp_corpus_file, os.path.join(datalocal_dir,"corpus.txt"))
-	os.remove(tmp_corpus_file)	
+	sanitize_file(os.path.join(data_dir, data_file), datalocal_dir, os.path.join(datalocal_dir,"corpus.txt"))
 
+	print ("Creating ngram-count using SRILM ....")
+	#call(["ngram-count","-version"])
 
-	print "Creating ngram-count using SRILM ...."
-	call(["ngram-count","-version"])
-
-	print "text file; 	" + os.path.join(datalocal_dir, "corpus.txt")
-	print "vocab file: 	" + os.path.join(datalocal_tmpdir,"vocab-full.txt")
-	print "lm file: 	" + os.path.join(datalocal_tmpdir, "lm.arpa")
+	print ("text file; 	" + os.path.join(datalocal_dir, "corpus.txt"))
+	print ("vocab file: 	" + os.path.join(datalocal_tmpdir,"vocab-full.txt"))
+	print ("lm file: 	" + os.path.join(datalocal_tmpdir, "lm.arpa"))
 
 	ngram_count_call = ["ngram-count",
 		"-order", lm_order, 
@@ -128,14 +128,13 @@ def main():
 		"-wbdiscount",
 		"-text", os.path.join(datalocal_dir, "corpus.txt"),
 		"-lm", os.path.join(datalocal_tmpdir,"lm.arpa")]
+
 	gz_call = ["gzip", os.path.join(datalocal_tmpdir,"lm.arpa")]
 
-	#print ngram_count_call
-	#print gz_call
 	call(ngram_count_call)
 	call(gz_call)
 
-	print "Completed creating ngram-count"
+	print ("Completed creating ngram-count")
 
 if __name__ == "__main__":
         main()

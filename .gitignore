@@ -12,3 +12,5 @@
 */s5/exp_*/*
 */s5/paldaruo_audio/*
 */s5/test_audio/*
+*/s5/conf/mfcc.conf
+*.tar.gz
